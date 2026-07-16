@@ -24,7 +24,7 @@ def segment_image(
     # 2. Convert RGB to BGR
     image_bgr = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
 
-    # 3. Block pixels that are close and same color
+    # 3. Combines pixels that are close and same color
     flattened = cv2.pyrMeanShiftFiltering(image_bgr, sp=spatial_radius, sr=color_radius)
 
     # 4. Find unique colors remaining in flattened image

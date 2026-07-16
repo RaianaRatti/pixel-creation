@@ -1,7 +1,10 @@
 from PIL import Image
 
-def downscale(image, width: int, height: int):
-    return image.resize((width, height), Image.Resampling.BOX)
+def downscale(image, width: int, height: int, method: str = "box") -> Image.Image:
+    if method.lower() == "lanczos":
+        return image.resize((width, height), Image.Resampling.LANCZOS)
+    else:
+        return image.resize((width, height), Image.Resampling.BOX)
 
 def upscale(image, scale: int):
     new_width = image.width * scale
