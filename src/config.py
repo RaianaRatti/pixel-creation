@@ -16,3 +16,6 @@ MAX_COLORS_PER_REGION = 3 # max colors per region in segmented region
 # color_boost.py ---------------------------------------
 SATURATION = 1.2
 CONTRAST = 1.1
+
+# dither.py ---------------------------------------
+STRENGTH = 0.1
