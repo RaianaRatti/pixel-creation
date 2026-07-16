@@ -3,7 +3,7 @@ import argparse
 
 from resize import upscale, downscale
 from palette import quantize
-from config import SCALE, NUM_COLORS
+from config import SCALE, TOTAL_COLORS
 
 def main():
 
@@ -24,7 +24,7 @@ def main():
     new_height = image.height // SCALE
 
     image_downscaled = downscale(image, new_width, new_height) # 40x downscale & upscale
-    image_quantized = quantize(image_downscaled, NUM_COLORS)
+    image_quantized = quantize(image_downscaled, TOTAL_COLORS)
     image_upscaled = upscale(image_quantized, SCALE)
 
     image_upscaled.save(args.output)
