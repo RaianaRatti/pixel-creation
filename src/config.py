@@ -19,3 +19,10 @@ CONTRAST = 1.1
 
 # dither.py ---------------------------------------
 STRENGTH = 0.1
+
+# borders.py ---------------------------------------
+BORDER_SIZE = 2
+BORDER_COLOR = "black"
+
+# preset.py ---------------------------------------
+PRESET = None
