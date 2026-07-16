@@ -12,3 +12,7 @@ MIN_REGION_SIZE = 1 # regions found in segmentation smaller than this get merged
 # color_budget.py ---------------------------------------
 MIN_COLORS_PER_REGION = 1 # min colors per region in segmented region
 MAX_COLORS_PER_REGION = 3 # max colors per region in segmented region
+
+# color_boost.py ---------------------------------------
+SATURATION = 1.2
+CONTRAST = 1.1
