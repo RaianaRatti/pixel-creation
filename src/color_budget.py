@@ -2,7 +2,7 @@ import numpy as np
 
 from config import TOTAL_COLORS, MIN_COLORS_PER_REGION, MAX_COLORS_PER_REGION
 
-def allocate_colors(
+def allocate_color_budget(
         image, 
         labels, 
         total_colors = TOTAL_COLORS, 
@@ -40,6 +40,6 @@ def allocate_colors(
             extra = 0
 
         budgets[label] += extra
-        budgets[label] = min(budgets[label], max_colors_per_region)
+        budgets[label] = max(1, min(budgets[label], max_colors_per_region))
 
     return budgets

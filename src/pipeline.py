@@ -1,4 +1,5 @@
-# src/pipeline.py
+import numpy as np
+from PIL import Image
 
 from resize import downscale_image, upscale_image
 from segmentation import segment_image
@@ -7,6 +8,8 @@ from color_budget import allocate_color_budget
 from palette import quantize_regions
 from color_boost import boost_colors
 from dither import ordered_dither
+from border_straighten import straighten_borders
+from borders import draw_region_borders
 # from borders import draw_region_borders
 
 def run_pipeline(
@@ -58,9 +61,9 @@ def run_pipeline(
 
     labels_full = segment_image(
         image,
+        segmentation_max_dimension=segmentation_max_dimension,
         spatial_radius=spatial_radius,
-        color_radius=color_radius,
-        max_dimension=segmentation_max_dimension
+        color_radius=color_radius
     )
 
 
@@ -91,10 +94,12 @@ def run_pipeline(
     # --------------------------------------------------
 
     block_labels = cleanup_small_regions(
+        np.array(block_image),
         block_labels,
-        block_image,
         min_region_size
     )
+
+    block_labels = straighten_borders(block_labels, max_deviation=2, min_boundary_length=4)
 
 
     # --------------------------------------------------
@@ -102,7 +107,7 @@ def run_pipeline(
     # --------------------------------------------------
 
     budgets = allocate_color_budget(
-        block_image,
+        np.array(block_image),
         block_labels,
 
         total_colors=colors,
@@ -116,11 +121,12 @@ def run_pipeline(
     # --------------------------------------------------
 
     pixel_image = quantize_regions(
-        block_image,
+        np.array(block_image),
         block_labels,
         budgets
     )
 
+    pixel_image = Image.fromarray(pixel_image)
 
     # --------------------------------------------------
     # 7. Boost saturation and contrast
@@ -157,15 +163,11 @@ def run_pipeline(
     # 10. Optional borders
     # --------------------------------------------------
 
-    '''if borders:
+    if borders:
         pixel_image = draw_region_borders(
-            pixel_image,
-            block_labels,
-
-            scale=scale,
-            border_size=border_size,
-            border_color=border_color
+            pixel_image, block_labels,
+            scale=scale, border_size=border_size, border_color=border_color
         )
 
 
-    return pixel_image '''
+    return pixel_image

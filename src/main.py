@@ -36,7 +36,6 @@ def parse_args():
 
     parser.add_argument(
         "--height",
-        required=True,
         type=int,
         help="Number of vertical pixel blocks"
     )
@@ -174,7 +173,7 @@ def main():
         image=image,
 
         width=args.width,
-        height=args.height,
+        height=int(image.height * (args.width / image.width)),
 
         colors=args.colors,
         min_colors_per_region=args.min_colors_per_region,

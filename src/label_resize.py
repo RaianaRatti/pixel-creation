@@ -5,8 +5,8 @@ from config import MIN_REGION_SIZE
 
 # Takes labels (segmented image) array and downscales it
 def resize_labels(labels: np.ndarray, width: int, height: int) -> np.ndarray:
-    input_width, input_height = labels.shape
-    output = np.zeroes((width, height), dtype=np.int32)
+    input_height, input_width = labels.shape
+    output = np.zeros((height, width), dtype=np.int32)
 
     x_scale = input_width / width
     y_scale = input_height / height
@@ -27,52 +27,37 @@ def resize_labels(labels: np.ndarray, width: int, height: int) -> np.ndarray:
     return output
 
 # Merges tiny areas (smaller than MIN_REGION_SIZE)
-def cleanup_small_regions(image: np.ndarray, labels: np.ndarray, min_region_size: int = MIN_REGION_SIZE):
-    counts = np.bincount(labels.ravel()) # map: label (region) -> # of pixels in label
-    region_colors = {}
+def cleanup_small_regions(image, labels, min_region_size=MIN_REGION_SIZE):
+    changed = True
+    while changed:
+        changed = False
+        counts = np.bincount(labels.ravel())
+        region_colors = {}
+        for label in range(len(counts)):
+            if counts[label] == 0:
+                continue
+            region_colors[label] = image[labels == label].mean(axis=0)
 
-    # Compute average color of each region
-    for label in range(len(counts)):
-        if counts[label] == 0:
-            continue
+        for label in range(1, len(counts)):
+            if counts[label] == 0 or counts[label] >= min_region_size:
+                continue
 
-        pixels = image[labels == label]
-        region_colors[label] = pixels.mean(axis=0)
+            region_pixels = np.argwhere(labels == label)
+            neighbor_labels = set()
+            for y, x in region_pixels:
+                for dy, dx in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    ny, nx = y + dy, x + dx
+                    if 0 <= ny < labels.shape[0] and 0 <= nx < labels.shape[1]:
+                        neighbor = labels[ny, nx]
+                        if neighbor != label:
+                            neighbor_labels.add(neighbor)
 
-    # Process tiny regions
-    for label in range(1, len(counts)):
-        if counts[label] >= min_region_size:
-            continue
-
-        region_pixels = np.argwhere(labels == label) # coordinates where pixel's label is (current) label
-        neighbor_labels = set() # empty set
-
-        for y, x in region_pixels:
-            for dy, dx in [(-1,0),(1,0),(0,-1),(0,1)]:
-                ny = y + dy
-                nx = x + dx
-
-                if (0 <= ny < labels.shape[0] and 0 <= nx < labels.shape[1]): # make sure in image
-                    neighbor = labels[ny, nx]
-
-                    if neighbor != label: # ignore neighboring pixels with same label
-                        neighbor_labels.add(neighbor)
-
-            if not neighbor_labels: # set empty- label of pixel does not touch any other label (except 0)
+            if not neighbor_labels:
                 continue
 
             source_color = region_colors[label]
-
-            best_label = None
-            best_distance = float("inf")
-
-            for neighbor in neighbor_labels:
-                dist = np.linalg.norm(source_color - region_colors[neighbor])
-
-                if dist < best_distance:
-                    best_distance = dist
-                    best_label = neighbor
-
+            best_label = min(neighbor_labels, key=lambda n: np.linalg.norm(source_color - region_colors[n]))
             labels[labels == label] = best_label
-        
-        return labels
+            changed = True  # re-scan, since counts are now stale
+
+    return labels
