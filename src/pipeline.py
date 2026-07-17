@@ -10,164 +10,77 @@ from color_boost import boost_colors
 from dither import ordered_dither
 from border_straighten import straighten_borders
 from borders import draw_region_borders
-# from borders import draw_region_borders
+from light_extract import extract_light_variation, resize_light_diff, reapply_light_variation
+
 
 def run_pipeline(
     image,
-
     width,
     height,
-
     colors,
     min_colors_per_region,
     max_colors_per_region,
-
     spatial_radius,
     color_radius,
     segmentation_max_dimension,
-
     min_region_size,
-
     saturation,
     contrast,
-
     borders,
     border_size,
     border_color,
-
+    max_deviation,
+    min_boundary_length,
     dither,
-
+    dither_strength,
     scale,
-
     preset=None,
+    blur_radius=31,
+    light_strength=1.0,
+    reapply_strength=0.4,
 ):
-    """
-    Runs the complete pixel room conversion pipeline.
-    """
-
-
-    # --------------------------------------------------
-    # 0. Apply preset (optional)
-    # --------------------------------------------------
-
-    # TODO:
-    # if preset:
-    #     apply_preset(...)
-
-
-    # --------------------------------------------------
-    # 1. Full resolution segmentation
-    # --------------------------------------------------
+    # image, light_diff = extract_light_variation(image, blur_radius=blur_radius, strength=light_strength)
 
     labels_full = segment_image(
         image,
         segmentation_max_dimension=segmentation_max_dimension,
         spatial_radius=spatial_radius,
-        color_radius=color_radius
+        color_radius=color_radius,
     )
 
+    block_image = downscale_image(image, width, height)
+    # block_light_diff = resize_light_diff(light_diff, width, height)
 
-    # --------------------------------------------------
-    # 2. Downscale image into block grid
-    # --------------------------------------------------
-
-    block_image = downscale_image(
-        image,
-        width,
-        height
-    )
-
-
-    # --------------------------------------------------
-    # 3. Resize label map to block grid
-    # --------------------------------------------------
-
-    block_labels = resize_labels(
-        labels_full,
-        width,
-        height
-    )
-
-
-    # --------------------------------------------------
-    # 4. Remove tiny regions
-    # --------------------------------------------------
-
-    block_labels = cleanup_small_regions(
-        np.array(block_image),
-        block_labels,
-        min_region_size
-    )
-
-    block_labels = straighten_borders(block_labels, max_deviation=2, min_boundary_length=4)
-
-
-    # --------------------------------------------------
-    # 5. Allocate color budget
-    # --------------------------------------------------
+    block_labels = resize_labels(labels_full, width, height)
+    block_labels = cleanup_small_regions(np.array(block_image), block_labels, min_region_size)
+    block_labels = straighten_borders(block_labels, max_deviation=max_deviation, min_boundary_length=min_boundary_length)
 
     budgets = allocate_color_budget(
         np.array(block_image),
         block_labels,
-
         total_colors=colors,
         min_colors_per_region=min_colors_per_region,
-        max_colors_per_region=max_colors_per_region
+        max_colors_per_region=max_colors_per_region,
     )
 
-
-    # --------------------------------------------------
-    # 6. Quantize each region independently
-    # --------------------------------------------------
-
-    pixel_image = quantize_regions(
-        np.array(block_image),
-        block_labels,
-        budgets
-    )
-
+    pixel_image = quantize_regions(np.array(block_image), block_labels, budgets)
     pixel_image = Image.fromarray(pixel_image)
+    # pixel_image = reapply_light_variation(pixel_image, block_light_diff, strength=reapply_strength)
 
-    # --------------------------------------------------
-    # 7. Boost saturation and contrast
-    # --------------------------------------------------
-
-    pixel_image = boost_colors(
-        pixel_image,
-        saturation=saturation,
-        contrast=contrast
-    )
-
-
-    # --------------------------------------------------
-    # 8. Optional dithering
-    # --------------------------------------------------
+    pixel_image = boost_colors(pixel_image, saturation=saturation, contrast=contrast)
 
     if dither:
-        pixel_image = ordered_dither(
-            pixel_image
-        )
+        pixel_image = ordered_dither(pixel_image, strength=dither_strength)
 
-
-    # --------------------------------------------------
-    # 9. Upscale with nearest neighbor
-    # --------------------------------------------------
-
-    pixel_image = upscale_image(
-        pixel_image,
-        scale
-    )
-
-
-    # --------------------------------------------------
-    # 10. Optional borders
-    # --------------------------------------------------
+    pixel_image = upscale_image(pixel_image, scale)
 
     if borders:
         pixel_image = draw_region_borders(
-            pixel_image, block_labels,
-            scale=scale, border_size=border_size, border_color=border_color
+            pixel_image,
+            block_labels,
+            scale=scale,
+            border_size=border_size,
+            border_color=border_color,
         )
-
 
     return pixel_image

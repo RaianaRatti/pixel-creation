@@ -1,17 +1,17 @@
 # main.py ---------------------------------------
-SCALE = 16 # scale to downscale image
-TOTAL_COLORS = 20 # number of colors to allow in quantization
+SCALE = 16
+TOTAL_COLORS = 20
 
 # segmentation.py ---------------------------------------
-SPATIAL_RADIUS = 10 # similar regions closer than this found in segmentation are grouped together
-COLOR_RADIUS = 20 # similar regions closer in color than this found in segmentation are grouped together
+SPATIAL_RADIUS = 10
+COLOR_RADIUS = 20
 
 # label_resize.py ---------------------------------------
-MIN_REGION_SIZE = 2 # regions found in segmentation smaller than this get merged with closest larger region
+MIN_REGION_SIZE = 2
 
 # color_budget.py ---------------------------------------
-MIN_COLORS_PER_REGION = 1 # min colors per region in segmented region
-MAX_COLORS_PER_REGION = 4 # max colors per region in segmented region
+MIN_COLORS_PER_REGION = 1
+MAX_COLORS_PER_REGION = 4
 
 # color_boost.py ---------------------------------------
 SATURATION = 1.5
@@ -23,6 +23,15 @@ STRENGTH = 0.08
 # borders.py ---------------------------------------
 BORDER_SIZE = 2
 BORDER_COLOR = "black"
+
+# border_straighten.py ---------------------------------------
+MAX_DEVIATION = 2
+MIN_BOUNDARY_LENGTH = 4
+
+# light_extract.py ---------------------------------------
+BLUR_RADIUS = 31
+LIGHT_STRENGTH = 1.0
+REAPPLY_STRENGTH = 0.4
 
 # preset.py ---------------------------------------
 PRESET = None
