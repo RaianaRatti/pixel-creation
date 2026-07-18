@@ -1,40 +1,64 @@
 # Pixel Room Converter - Project Plan
 
+## Contents
+
+- [Goal](#goal)
+- [Design Principles](#design-principles)
+- [Tech Stack](#tech-stack)
+- [Repository Layout](#repository-layout)
+- [Pipeline](#pipeline)
+- [Stage Details](#stage-details)
+- [CLI Design](#cli-design)
+- [Presets](#presets)
+- [Testing Plan](#testing-plan)
+- [Milestones](#milestones)
+- [Implementation Notes](#implementation-notes)
+- [Known Issues](#known-issues)
+- [Path to v1.0](#path-to-v10)
+- [Future Extensions](#future-extensions)
+
+---
+
 ## Goal
 
-- Take a real photo of a room, bedroom, or location and turn it into pixel art with a strong retro arcade or video game look, similar to Undertale rooms
-- User picks the pixel grid dimensions (for example 32x24 or 64x48 blocks)
-- Colors are chosen per object, not globally, so a busy object like a sofa does not eat up most of the color budget and end up looking noisy instead of flat and blocky
-- Optional black borders drawn around each detected object, not a uniform grid. Two objects sitting next to each other share a single border line, not two
-- Bright, saturated, "popping" colors
-- Everything runs locally with plain code, using well established local libraries. No external APIs, no paid services, no network calls, no downloaded ML models
+Take a real photo of a room or interior and turn it into pixel art with a retro arcade or video game look, in the style of Undertale interiors.
 
-## Core Idea
+Requirements:
 
-- Segmentation needs to be reliable, so instead of a hand written region merging algorithm, this uses OpenCV's built in classical segmentation tools. These are not machine learning models, they are standard, decades old computer vision algorithms shipped inside the `cv2` library, and they run entirely on your machine
-- Segmentation also needs to happen on the real photo before it gets shrunk down to the tiny block grid, since a 48x32 block grid is too coarse to find clean object edges. The block grid is built afterward from the full resolution segmentation result
-- Pipeline order:
-  - Load the input image
-  - Run segmentation on the full resolution photo using `cv2.pyrMeanShiftFiltering` followed by `cv2.connectedComponents`, producing a full resolution region label map
-  - Downscale the color image to the target block grid size using area averaging, and separately downscale the label map to the same grid size using a majority vote per block, since labels cannot be averaged like colors
-  - For each region, measure its internal color variation and assign it a share of the total color budget
-  - Quantize each region independently, using only that region's own pixels and its own assigned color count
-  - Reassemble the full block grid from all the quantized regions
-  - Boost saturation and contrast so colors look vivid
-  - Optionally apply dithering for a more textured retro shading look
-  - Upscale back up using nearest neighbor scaling to keep hard pixel edges
-  - Optionally draw a black border at the region boundaries already found during segmentation
-  - Save the final image
+- The user picks the pixel grid dimensions, for example 32x24 or 64x48 blocks
+- Colors are chosen per object, not globally, so a busy object like a sofa does not eat most of the color budget and end up noisy instead of flat and blocky
+- Optional borders drawn around each detected object, not as a uniform grid. Two objects sitting next to each other share one border line, not two
+- Bright, saturated colors
+- Everything runs locally with plain code and established libraries. No external APIs, no paid services, no network calls, no downloaded model weights
+
+---
+
+## Design Principles
+
+**Use established segmentation, not hand written region merging.** OpenCV ships classical, decades old computer vision algorithms in `cv2`. These are not machine learning models and they run entirely on the local machine, which keeps the project dependency light and predictable.
+
+**Segment before downscaling.** A 48x32 block grid is far too coarse to find clean object edges. Segmentation runs on the full resolution photo, and the block grid is built afterward from the resulting label map.
+
+**Labels are categories, not values.** A label map cannot be resized with normal image interpolation, since averaging two label IDs produces a meaningless third ID. Downscaling uses a majority vote per block instead.
+
+**Quantize per region, not globally.** Each region gets its own palette drawn from its own pixels, so regions never compete for shared palette slots.
+
+---
 
 ## Tech Stack
 
-- Python 3.10+
-- Pillow, for image loading, resizing, saving, drawing borders, and per-region color quantization
-- NumPy, for array based pixel manipulation, majority vote downscaling of the label map, and color variation math
-- OpenCV (`opencv-python` package, imported as `cv2`), for reliable segmentation using `cv2.pyrMeanShiftFiltering` and `cv2.connectedComponents`. Pillow has no segmentation tools of its own, this is why OpenCV is needed specifically for this step
-- No API keys, no internet access required at runtime, no model weight downloads
+| Component | Use |
+|---|---|
+| Python 3.10+ | Runtime |
+| Pillow | Image loading, resizing, saving, border drawing, per-region quantization |
+| NumPy | Array-based pixel manipulation, majority vote downscaling, color variation math |
+| OpenCV (`opencv-python`) | Segmentation via `cv2.pyrMeanShiftFiltering` and `cv2.connectedComponents`. Pillow has no segmentation tools, which is why OpenCV is needed for this step specifically |
 
-## Project Structure
+No API keys, no runtime internet access, no model weight downloads.
+
+---
+
+## Repository Layout
 
 ```
 pixel-room-converter/
@@ -42,20 +66,23 @@ pixel-room-converter/
   README.md
   requirements.txt
   src/
-    main.py              entry point, handles CLI arguments
-    pipeline.py          runs the full conversion pipeline in order
-    resize.py            downscale/upscale logic, uses Pillow's Image.resize and Image.NEAREST
-    segmentation.py      full resolution segmentation, uses cv2.pyrMeanShiftFiltering and cv2.connectedComponents
-    label_resize.py      majority vote downscaling of the label map to block grid resolution, uses NumPy
-    color_budget.py      decides how many colors each region gets based on its internal variation
-    palette.py           quantizes each region independently, uses Image.quantize per region crop
-    color_boost.py       saturation/contrast adjustment, uses Image.convert("HSV") and ImageEnhance.Contrast
-    dither.py            ordered (Bayer) dithering implementation, NumPy only
-    borders.py           draws borders at region boundaries, uses ImageDraw
-    presets.py           predefined style presets (see below)
+    main.py               Entry point, CLI argument parsing
+    pipeline.py           Runs the full conversion pipeline in order
+    config.py             Centralized default values
+    segmentation.py       Full resolution segmentation with cv2
+    resize.py             Downscale and upscale, Image.resize and Image.NEAREST
+    label_resize.py       Majority vote downscaling of the label map
+    color_budget.py       Per-region color count allocation
+    palette.py            Per-region quantization via Image.quantize
+    border_straighten.py  Least-squares line fitting for boundaries
+    color_boost.py        Saturation and contrast via HSV and ImageEnhance
+    dither.py             Ordered Bayer dithering, NumPy only
+    borders.py            Border drawing at region boundaries via ImageDraw
+    light_extract.py      Luminance extraction and reapplication
+    presets.py            Predefined style presets
   examples/
-    input/               sample room photos for testing
-    output/               generated results for comparison
+    input/                Sample room photos for testing
+    output/               Generated results for comparison
   tests/
     test_resize.py
     test_segmentation.py
@@ -65,183 +92,298 @@ pixel-room-converter/
     test_pipeline.py
 ```
 
+---
+
+## Pipeline
+
+| Stage | Step | Module |
+|---|---|---|
+| 1 | Load the input image | `main.py` |
+| 2 | Extract luminance pattern (optional) | `light_extract.py` |
+| 3 | Segment the full resolution photo into a region label map | `segmentation.py` |
+| 4 | Downscale the color image to the block grid using area averaging | `resize.py` |
+| 5 | Downscale the label map to the same grid using majority vote | `label_resize.py` |
+| 6 | Merge undersized regions into their nearest neighbor | `pipeline.py` |
+| 7 | Straighten jagged region boundaries | `border_straighten.py` |
+| 8 | Allocate the color budget across regions by variation and size | `color_budget.py` |
+| 9 | Quantize each region independently, then reassemble the grid | `palette.py` |
+| 10 | Boost saturation and contrast | `color_boost.py` |
+| 11 | Apply ordered dithering (optional) | `dither.py` |
+| 12 | Upscale with nearest neighbor to preserve hard edges | `resize.py` |
+| 13 | Draw borders at region boundaries (optional) | `borders.py` |
+| 14 | Reapply the luminance pattern (optional) | `light_extract.py` |
+| 15 | Save the final image | `main.py` |
+
+---
+
+## Stage Details
+
+### Full Resolution Segmentation
+
+`segmentation.py`
+
+1. Resize the input so its longest side is `--segmentation-max-dimension` pixels using `Image.resize` with `Image.LANCZOS`. This is purely for speed, since mean shift filtering is slow on large images and the result gets downscaled to the block grid anyway.
+2. Convert from Pillow RGB to OpenCV BGR with `cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)`.
+3. Call `cv2.pyrMeanShiftFiltering(src, sp=spatial_radius, sr=color_radius)`. This flattens the image so pixels close in both position and color collapse to one exact matching color, pre-grouping the photo into flat blobs.
+4. Find every unique color left in the flattened result with `np.unique(flattened.reshape(-1, 3), axis=0)`.
+5. For each unique color, build a binary mask with `np.all(flattened == color, axis=-1).astype(np.uint8)` and run `cv2.connectedComponents(mask, connectivity=4)`. This splits same colored but spatially separate areas into distinct regions, so two different pillows do not merge just because a third same colored object exists elsewhere in the room.
+6. Combine the results into one master label array, offsetting label numbers from each call so they stay unique across the image.
+
+Output: a full resolution 2D NumPy array of integer labels, one per pixel, aligned with the resized working image.
+
+### Downscaling
+
+`resize.py`, `label_resize.py`
+
+- Downscale the original color photo to `width x height` blocks using `Image.resize` with `Image.BOX` or `Image.LANCZOS`. This defines the final block colors.
+- Downscale the label map to the same grid separately. For each output block, gather the label map pixels inside that block and take the most common label with `np.bincount(block_labels.ravel()).argmax()`.
+
+Output: a `width x height` grid of labels aligned one to one with the block grid of colors.
+
+### Small Region Cleanup
+
+- Count blocks per label using `np.bincount` on the flattened label grid.
+- Any region below `--min-region-size` is reassigned to the neighboring region with the closest average color, so tiny slivers left over from mean shift filtering do not become their own object with their own border.
+
+### Color Budget Allocation
+
+`color_budget.py`
+
+- Measure each region's internal color variation as the standard deviation of its original, non quantized block colors.
+- Flat regions such as a plain wall or a single colored cushion get a count near `--min-colors-per-region`.
+- High variation regions such as a patterned rug or a shadowed corner get more, up to `--max-colors-per-region`.
+- Distribute the total `--colors` budget proportionally to variation and region size, so the sum stays close to the requested total rather than ballooning.
+
+### Per-Region Quantization
+
+`palette.py`
+
+- Collect only the block colors belonging to a region, wrap them in a small temporary Pillow image, and call `Image.quantize(colors=assigned_count, method=Image.MEDIANCUT)` on that image alone.
+- Map the reduced colors back onto that region's blocks in the main grid.
+
+This is the key improvement over global quantization. A busy sofa with 2 assigned colors gets those 2 colors chosen specifically to represent the sofa's own range, instead of competing with the rest of the room.
+
+### Reassembly
+
+- Walk the block grid and replace each block's color with its region's quantized result.
+- Output remains at block grid resolution with per-region flattened colors.
+
+### Saturation and Contrast Boost
+
+`color_boost.py`
+
+- Convert to HSV with `image.convert("HSV")`, split channels, multiply the S channel by `--saturation`, clip to valid range, merge, convert back to RGB.
+- Apply `ImageEnhance.Contrast(image).enhance(contrast)` afterward.
+
+### Dithering
+
+`dither.py`
+
+- Apply an ordered Bayer matrix dither as a NumPy operation, either before quantization or blended into it.
+- Adds textured retro shading across color transitions inside a region instead of perfectly flat blocks.
+
+### Upscaling
+
+`resize.py`
+
+- Scale the block grid back up with `Image.resize` using `Image.NEAREST` only. Any other resampling method blurs the hard pixel edges.
+
+### Border Drawing
+
+`borders.py`
+
+- Reuse the label grid from the earlier stages. There is no need to redetect boundaries after quantization.
+- For every block, compare its label to the block directly to its right and the block directly below.
+- If the labels differ, record that edge as a border.
+- After upscaling, convert each recorded boundary into pixel coordinates and draw it once with `ImageDraw.Draw(image).line(...)`, using `--border-size` and `--border-color`.
+
+Because each boundary is checked once in two directions rather than four, two touching objects share exactly one line and never a doubled line. With `--borders` off, the pipeline produces plain per-region colored blocks with no outlines.
+
+---
+
 ## CLI Design
 
-- Basic usage:
+Basic usage:
+
 ```
 python src/main.py --input room.jpg --output room_pixel.png --width 48 --height 32
 ```
-- `--input` : path to source image (required)
-- `--output` : path to save result (required)
-- `--width`, `--height` : number of pixel blocks across and down (required)
-- `--colors` : total color budget shared across the whole image, default 16
-- `--min-colors-per-region` : smallest number of colors any single region can be assigned, default 1
-- `--max-colors-per-region` : largest number of colors any single region can be assigned, default 6, so no single busy object can eat the entire budget
-- `--spatial-radius` : passed directly to `cv2.pyrMeanShiftFiltering` as `sp`, controls how far apart in the image two pixels can be and still merge, default 12
-- `--color-radius` : passed directly to `cv2.pyrMeanShiftFiltering` as `sr`, controls how different two colors can be and still merge, default 20
-- `--min-region-size` : minimum block count a region must have after downscaling to the block grid before it is merged into its closest neighbor by color distance, default 2, filters out single stray pixel blocks
-- `--saturation` : multiplier for color saturation boost, default 1.4
-- `--contrast` : multiplier for contrast boost, default 1.2
-- `--borders` : on/off flag to enable region borders, default off
-- `--border-size` : thickness in final pixels of the border lines, default 2
-- `--border-color` : color of the border lines, default black
-- `--dither` : on/off flag to enable ordered dithering, default off
-- `--scale` : final output size multiplier per block, default 16
-- `--segmentation-max-dimension` : the working photo gets resized so its longest side does not exceed this value before running `cv2.pyrMeanShiftFiltering`, default 500, purely for speed since mean shift filtering is slow on large images and the result gets downscaled to the block grid anyway
-- `--preset` : optional named preset that sets several of the above at once
 
-## Step Details
+### Required
 
-- **1. Full Resolution Segmentation** (`segmentation.py`)
-  - Resize the input photo so its longest side is `--segmentation-max-dimension` pixels, using `Image.resize` with `Image.LANCZOS`, purely for speed
-  - Convert the resized image from a Pillow RGB array to OpenCV's expected format with `cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)`, since OpenCV expects BGR channel order, not RGB
-  - Call `cv2.pyrMeanShiftFiltering(src, sp=spatial_radius, sr=color_radius)`. This flattens the image so that pixels close together in both position and color become one exact matching color, effectively pre-grouping the photo into flat colored blobs
-  - Find every unique color left in the flattened result with `np.unique(flattened.reshape(-1, 3), axis=0)`
-  - For each unique color, build a binary mask with `np.all(flattened == color, axis=-1).astype(np.uint8)`, then run `cv2.connectedComponents(mask, connectivity=4)` on that mask. This splits any same colored but spatially separate areas into distinct labeled regions, so two different colored pillows do not merge just because a third same colored object exists elsewhere in the room
-  - Combine the results from every unique color into one master label array, offsetting the label numbers from each call so they stay unique across the whole image
-  - The output is a single full resolution 2D NumPy array of integer labels, one label per pixel, matching the resized working image
+| Flag | Description |
+|---|---|
+| `--input` | Path to the source image |
+| `--output` | Path to save the result |
+| `--width` | Number of pixel blocks across |
+| `--height` | Number of pixel blocks down. Auto-calculated from width if omitted |
 
-- **2. Downscaling** (`resize.py`, `label_resize.py`)
-  - Downscale the original full color photo to `width x height` blocks using `Image.resize` with `Image.BOX` or `Image.LANCZOS`, same as before, this defines the final block colors
-  - Separately downscale the full resolution label map from step 1 to the same `width x height` grid. Since labels are category numbers, not values that can be blended, this cannot use normal image resizing. Instead, for each output block, gather the label map pixels that fall inside that block's region and take the most common label using `np.bincount(block_labels.ravel()).argmax()`
-  - The result is a `width x height` grid of region labels lined up one to one with the block grid of colors
+### Color budget
 
-- **3. Small Region Cleanup**
-  - Count how many blocks belong to each label using `np.bincount` on the flattened label grid
-  - Any region with a count below `--min-region-size` gets reassigned to the label of its closest neighboring region by average color distance, so tiny leftover slivers from the mean shift step do not become their own object with their own tiny border
+| Flag | Default | Description |
+|---|---|---|
+| `--colors` | 16 | Total color budget shared across the whole image |
+| `--min-colors-per-region` | 1 | Smallest count any single region can be assigned |
+| `--max-colors-per-region` | 6 | Largest count any single region can be assigned, so no busy object eats the whole budget |
 
-- **4. Color Budget Allocation** (`color_budget.py`)
-  - For each region, measure its internal color variation using the standard deviation of the original, non quantized block colors that belong to that region
-  - Flat, low variation regions (a plain wall, a single colored cushion) get a color count close to `--min-colors-per-region`
-  - Higher variation regions (a patterned rug, a shadowed corner) get more colors, up to `--max-colors-per-region`
-  - Distribute the total `--colors` budget across all regions proportionally to their variation and their size, so the sum stays close to the requested total instead of ballooning
+### Segmentation
 
-- **5. Per-Region Quantization** (`palette.py`)
-  - For each region, collect only the block colors belonging to that region, wrap them into a small temporary Pillow image, and call `Image.quantize(colors=assigned_count, method=Image.MEDIANCUT)` on just that temporary image
-  - Map the resulting reduced colors back onto that region's blocks in the main block grid
-  - This is the key improvement: a busy sofa with only 2 assigned colors gets those colors chosen specifically to represent the sofa's own limited color range, not competing with the rest of the room for shared palette slots
+| Flag | Default | Description |
+|---|---|---|
+| `--spatial-radius` | 12 | Passed to `cv2.pyrMeanShiftFiltering` as `sp`. How far apart two pixels can be and still merge |
+| `--color-radius` | 20 | Passed as `sr`. How different two colors can be and still merge |
+| `--min-region-size` | 2 | Minimum block count after downscaling before a region is merged into its nearest neighbor by color distance. Filters stray single blocks |
+| `--segmentation-max-dimension` | 500 | Longest side of the working photo before mean shift filtering. Speed only |
 
-- **6. Reassembly**
-  - Walk the block grid and replace each block's color with its region's quantized result from step 5
-  - The output at this point is still at block grid resolution with per-region flattened colors
+### Borders
 
-- **7. Saturation and Contrast Boost** (`color_boost.py`)
-  - Convert to HSV with `image.convert("HSV")`, split channels, multiply the S channel by `--saturation`, clip to valid range, merge, convert back to RGB
-  - Apply `ImageEnhance.Contrast(image).enhance(--contrast)` afterward
+| Flag | Default | Description |
+|---|---|---|
+| `--borders` | off | Enable region borders |
+| `--border-size` | 2 | Border thickness in final pixels |
+| `--border-color` | black | Border line color |
+| `--max-deviation` | 2 | Maximum pixel distance for border straightening |
+| `--min-boundary-length` | 4 | Minimum boundary length before straightening is attempted |
 
-- **8. Dithering (optional)** (`dither.py`)
-  - Apply an ordered Bayer matrix dither as a NumPy operation, either before or blended into the per-region quantization step in step 5
-  - Adds a textured, retro shading look to color transitions inside a region instead of perfectly flat blocks
+### Color adjustment
 
-- **9. Upscaling** (`resize.py`)
-  - Scale the block grid back up using `Image.resize` with `Image.NEAREST` only, since any other resampling method blurs the hard pixel edges
+| Flag | Default | Description |
+|---|---|---|
+| `--saturation` | 1.4 | Saturation multiplier |
+| `--contrast` | 1.2 | Contrast multiplier |
 
-- **10. Border Drawing (optional)** (`borders.py`)
-  - Reuse the region label grid already computed in steps 1 to 3, no need to redetect boundaries after quantization
-  - For every block, compare its region label to the block directly to its right and the block directly below it
-  - If the labels differ, record that edge as a border
-  - After upscaling, convert each recorded boundary into pixel coordinates and draw it once with `ImageDraw.Draw(image).line(...)`, using `--border-size` and `--border-color`
-  - Since each boundary is only checked once, right and down, not all four directions, two touching objects share exactly one line, never a doubled line
-  - Controlled by `--borders`. With it off, the pipeline produces plain per-region colored blocks with no outlines
+### Dithering
+
+| Flag | Default | Description |
+|---|---|---|
+| `--dither` | off | Enable ordered dithering |
+| `--dither-strength` | 0.08 | Strength of the effect |
+
+### Light extraction
+
+| Flag | Default | Description |
+|---|---|---|
+| `--blur-radius` | 10 | Radius used to extract the lighting pattern |
+| `--light-strength` | 1.0 | How much lighting is removed from the photo before segmentation |
+| `--reapply-strength` | 1.0 | How much lighting is reapplied to the final image |
+
+### Output
+
+| Flag | Default | Description |
+|---|---|---|
+| `--scale` | 16 | Final output size multiplier per block |
+| `--preset` | none | Named preset that sets several flags at once |
+
+---
 
 ## Presets
 
-- `undertale` : dark background palette, 16 total colors, low max colors per region, region borders on, high saturation on accent colors
-- `gameboy` : 4 shade green monochrome palette, 1 color per region, region borders off
-- `nes` : 32 total colors, moderate max colors per region, no dithering, region borders on
-- `arcade-bright` : 24 total colors, high saturation, region borders on with a thin border size, no dithering
+| Preset | Intent |
+|---|---|
+| `undertale` | Dark background palette, 16 total colors, low max colors per region, borders on, high saturation on accents |
+| `gameboy` | Four shade green monochrome, 1 color per region, borders off |
+| `nes` | 32 total colors, moderate max per region, no dithering, borders on |
+| `arcade-bright` | 24 total colors, high saturation, borders on with thin border size, no dithering |
+
+Any flag passed after a preset overrides that preset's value.
+
+---
 
 ## Testing Plan
 
-- Unit tests for each module in isolation:
-  - resize produces correct output dimensions
-  - segmentation gives a known flat colored test image exactly one label, and a test image with two clearly different colored halves exactly two labels
-  - label_resize picks the correct majority label for a block that straddles two labeled regions
-  - color budget allocation gives flat test regions the minimum color count and high variation test regions a higher count, and the total stays close to the requested budget
-  - per-region quantization only uses colors that appear within that region's own pixels
-  - borders appear only at recorded region boundaries and never as a full grid
-- A small set of sample room photos in `examples/input/` used to visually check output quality after each pipeline change
-- Manual visual comparison against real Undertale room screenshots to judge style accuracy, kept manual since this part is subjective
+Unit tests per module:
 
-## Milestones (Current Status)
+| Module | Test |
+|---|---|
+| `resize` | Output dimensions match the requested grid |
+| `segmentation` | A flat colored test image yields exactly one label. An image with two clearly different halves yields exactly two |
+| `label_resize` | The correct majority label is picked for a block straddling two regions |
+| `color_budget` | Flat test regions get the minimum count, high variation regions get more, and the total stays near the requested budget |
+| `palette` | Per-region quantization only uses colors present in that region's own pixels |
+| `borders` | Borders appear only at recorded region boundaries, never as a full grid |
 
-1. ✅ Basic pipeline working end to end: input photo to blocky pixel image, one shared color count, no segmentation, no borders
-2. ✅ Add full resolution segmentation with cv2.pyrMeanShiftFiltering and cv2.connectedComponents
-3. ✅ Add label map downscaling to block grid resolution using majority vote
-4. ✅ Add small region cleanup
-5. ✅ Add color budget allocation based on per-region variation
-6. ✅ Add per-region quantization and reassembly
-7. ✅ Add saturation and contrast boost
-8. ✅ Add border drawing using the stored region label grid
-9. ✅ Add dithering option
-10. ✅ Add presets framework (CLI support, implementation pending)
-11. ✅ Write README with usage instructions
-12. ✅ Add border straightening with line fitting algorithm
-13. ⚠️ Add light extraction (experimental, needs tuning - "looks worse" per recent commit)
+Beyond unit tests, a small set of sample photos in `examples/input/` is used to visually check output quality after each pipeline change. Style accuracy is judged by manual comparison against real Undertale room screenshots, which stays manual because it is subjective.
+
+---
+
+## Milestones
+
+| # | Milestone | Status |
+|---|---|---|
+| 1 | Basic pipeline end to end, one shared color count, no segmentation, no borders | Done |
+| 2 | Full resolution segmentation with `cv2.pyrMeanShiftFiltering` and `cv2.connectedComponents` | Done |
+| 3 | Label map downscaling via majority vote | Done |
+| 4 | Small region cleanup | Done |
+| 5 | Color budget allocation from per-region variation | Done |
+| 6 | Per-region quantization and reassembly | Done |
+| 7 | Saturation and contrast boost | Done |
+| 8 | Border drawing from the stored label grid | Done |
+| 9 | Dithering option | Done |
+| 10 | Presets framework in the CLI | Done, definitions pending |
+| 11 | README with usage instructions | Done |
+| 12 | Border straightening with line fitting | Done |
+| 13 | Light extraction | Partial, reapply-only mode works |
+
+---
 
 ## Implementation Notes
 
-### Completed Features
+### Border Straightening
 
-**Border Straightening** (`border_straighten.py`)
-- Implements least-squares line fitting to straighten jagged region boundaries
-- Fits lines to detected boundaries in both vertical and horizontal directions
-- Canonical ordering ensures consistent boundary detection even with small notches
-- Configurability via `--max-deviation` and `--min-boundary-length`
-- Snap points to fitted line within `max_deviation` pixels
+`border_straighten.py`
 
-**Light Extraction** (`light_extract.py`)
-- Extracts luminance patterns from original image using Gaussian blur
-- Separates lighting from object color, preserving hue and saturation
-- Can be disabled by setting `--light-strength 0`
-- ⚠️ May reduce fine detail visibility; currently experimental
-- Controlled by `--blur-radius`, `--light-strength`, and `--reapply-strength`
+Uses least-squares line fitting to straighten jagged region boundaries. Lines are fit to detected boundaries in both vertical and horizontal directions, and points within `--max-deviation` pixels are snapped to the fitted line. Canonical ordering keeps boundary detection consistent even when small notches are present. Controlled by `--max-deviation` and `--min-boundary-length`.
 
-**Color Boosting** (`color_boost.py`)
-- Converts to HSV color space and multiplies saturation channel
-- Applies contrast enhancement afterward
-- Configurable via `--saturation` and `--contrast`
+### Light Extraction
 
-**Dithering** (`dither.py`)
-- Ordered Bayer matrix dithering implementation
-- Provides textured retro shading effect
-- Configurable strength via `--dither-strength`
+`light_extract.py`
 
-**CLI & Configuration** (`main.py`, `config.py`)
-- Full argument parsing for all pipeline parameters
-- Centralized default configuration in `config.py`
-- Auto-height calculation from width to preserve aspect ratio
-- Support for all pipeline features
+Extracts luminance patterns from the original image using Gaussian blur, separating lighting from object color while preserving hue and saturation. Controlled by `--blur-radius`, `--light-strength`, and `--reapply-strength`.
 
-### Known Issues
+The useful configuration is reapply-only. Setting `--light-strength 0.0` with `--reapply-strength 1.0` skips the initial filtering, so no luminance is stripped before segmentation and fine detail is preserved, while the extracted lighting pattern is still layered back onto the output. This works well in rooms with a lot of light, where lamps, windows, and brightness falloff carry much of the scene's character.
 
-1. **Light Extraction Degradation**: Recent commit "added light extraction but just looks worse" - the feature extracts luminance but may reduce detail visibility. Set `--light-strength 0` to disable.
+Raising `--light-strength` above 0 removes luminance before quantization and tends to flatten detail. That path is still experimental.
 
-2. **Requirements Missing**: `requirements.txt` is missing `opencv-python` which is required for segmentation. Should be added.
+### Architecture Decisions
 
-3. **Presets Not Implemented**: Framework exists in CLI, but preset definitions are not yet implemented in code.
+| Decision | Reason |
+|---|---|
+| Majority vote label downscaling | Label IDs are categories and cannot be averaged |
+| Per-region color budgeting | Prevents high variation regions from consuming the whole palette |
+| Regional quantization | Avoids global palette conflicts between unrelated objects |
+| Boundary post-processing after downscaling | Straightening on the block grid gives better results than on the full resolution map |
+| Two-phase lighting | Extraction happens before segmentation, reapplication after upscaling |
 
-### Architecture Notes
+---
 
-- **Majority Vote Label Downscaling**: Ensures labels remain discrete during downscaling (can't average category IDs)
-- **Per-Region Color Budgeting**: Prevents large regions from consuming all colors based on variation metrics
-- **Regional Quantization**: Each region quantizes independently, avoiding global palette conflicts
-- **Boundary Post-Processing**: Border straightening happens after label downscaling, not before, for better results
-- **Two-Phase Lighting**: Light extraction before segmentation preserves segmentation quality; reapplication happens after upscaling
+## Known Issues
 
-## Next Steps for v1.0 Release
+| Issue | Detail | Workaround |
+|---|---|---|
+| Light extraction degradation | Extracting luminance before segmentation reduces detail visibility | Set `--light-strength 0.0` and keep `--reapply-strength 1.0` |
+| Missing dependency | `requirements.txt` does not list `opencv-python`, which segmentation requires | Add it before release |
+| Presets not implemented | The CLI framework exists but preset definitions are not written in code | Implement in `presets.py` |
+| Over-straightened borders | Complex curved boundaries can be straightened too aggressively | Adjust `--max-deviation` and `--min-boundary-length` |
 
-1. **Fix Missing Dependency**: Add `opencv-python` to `requirements.txt`
-2. **Implement Presets**: Add preset definitions (Undertale dark, Gameboy monochrome, NES 8-bit, Arcade bright) to CLI
-3. **Test & Validate**: Run end-to-end tests on sample images to verify all features work
-4. **Light Extraction Tuning**: Either improve the light extraction algorithm to preserve more detail, or document when to disable it
-5. **Example Images**: Add before/after examples to the repository for demonstration
+---
 
-## Possible Future Extensions (not required for v1)
+## Path to v1.0
 
-- Simple GUI (Tkinter) instead of CLI only, still no external services
-- Batch mode to convert a whole folder of photos at once
-- Palette lock to a specific existing image so multiple outputs share one consistent look
-- Try `cv2.watershed` with markers as an alternative segmentation backend for cases where two touching objects share nearly identical colors and mean shift filtering merges them into one region
-- Let the user manually nudge region boundaries or manually merge two regions, for cases where automatic segmentation splits or merges objects in a way that does not match what the user actually wants
-- Interactive UI to preview parameter changes before final export
+1. Add `opencv-python` to `requirements.txt`
+2. Implement the preset definitions (undertale, gameboy, nes, arcade-bright) in `presets.py`
+3. Run end to end tests on the sample images to verify every feature works
+4. Document the reapply-only light extraction configuration as the recommended default, and decide whether full extraction is worth keeping
+5. Add before and after example images to the repository
+
+---
+
+## Future Extensions
+
+Not required for v1:
+
+- Batch mode to convert a whole folder at once
+- Simple Tkinter GUI as an alternative to the CLI, still with no external services
+- Palette locking to an existing image so multiple outputs share one consistent look
+- `cv2.watershed` with markers as an alternative segmentation backend, for cases where two touching objects share nearly identical colors and mean shift filtering merges them
+- Manual boundary nudging and region merging, for cases where automatic segmentation splits or merges objects against the user's intent
+- Interactive preview of parameter changes before final export
