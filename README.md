@@ -1,8 +1,10 @@
-# Pixel Room Converter
+# Pixelator
 
-Convert real photos of rooms into pixel art with a retro arcade or video game look, in the style of Undertale interiors.
+I introduce to you... THE PIXELATOR!!!
 
-Everything runs locally. No external APIs, no network calls, no ML models.
+![Doof](images/doofinshmertz.png)
+
+(Everything runs locally. No external APIs, no network calls, no ML models.)
 
 ---
 
