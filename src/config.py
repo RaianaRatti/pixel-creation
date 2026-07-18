@@ -6,7 +6,7 @@ SPATIAL_RADIUS = 10
 COLOR_RADIUS = 18
 
 # label_resize.py ---------------------------------------
-MIN_REGION_SIZE = 4
+MIN_REGION_SIZE = 1
 
 # color_budget.py ---------------------------------------
 MIN_COLORS_PER_REGION = 1
