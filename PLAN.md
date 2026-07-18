@@ -163,19 +163,79 @@ python src/main.py --input room.jpg --output room_pixel.png --width 48 --height 
 - A small set of sample room photos in `examples/input/` used to visually check output quality after each pipeline change
 - Manual visual comparison against real Undertale room screenshots to judge style accuracy, kept manual since this part is subjective
 
-## Milestones
+## Milestones (Current Status)
 
-1. Basic pipeline working end to end: input photo to blocky pixel image, one shared color count, no segmentation, no borders
-2. Add full resolution segmentation with cv2.pyrMeanShiftFiltering and cv2.connectedComponents
-3. Add label map downscaling to block grid resolution using majority vote
-4. Add small region cleanup
-5. Add color budget allocation based on per-region variation
-6. Add per-region quantization and reassembly
-7. Add saturation and contrast boost
-8. Add border drawing using the stored region label grid
-9. Add dithering option
-10. Add presets and polish CLI
-11. Write README with example before/after images and usage instructions
+1. ✅ Basic pipeline working end to end: input photo to blocky pixel image, one shared color count, no segmentation, no borders
+2. ✅ Add full resolution segmentation with cv2.pyrMeanShiftFiltering and cv2.connectedComponents
+3. ✅ Add label map downscaling to block grid resolution using majority vote
+4. ✅ Add small region cleanup
+5. ✅ Add color budget allocation based on per-region variation
+6. ✅ Add per-region quantization and reassembly
+7. ✅ Add saturation and contrast boost
+8. ✅ Add border drawing using the stored region label grid
+9. ✅ Add dithering option
+10. ✅ Add presets framework (CLI support, implementation pending)
+11. ✅ Write README with usage instructions
+12. ✅ Add border straightening with line fitting algorithm
+13. ⚠️ Add light extraction (experimental, needs tuning - "looks worse" per recent commit)
+
+## Implementation Notes
+
+### Completed Features
+
+**Border Straightening** (`border_straighten.py`)
+- Implements least-squares line fitting to straighten jagged region boundaries
+- Fits lines to detected boundaries in both vertical and horizontal directions
+- Canonical ordering ensures consistent boundary detection even with small notches
+- Configurability via `--max-deviation` and `--min-boundary-length`
+- Snap points to fitted line within `max_deviation` pixels
+
+**Light Extraction** (`light_extract.py`)
+- Extracts luminance patterns from original image using Gaussian blur
+- Separates lighting from object color, preserving hue and saturation
+- Can be disabled by setting `--light-strength 0`
+- ⚠️ May reduce fine detail visibility; currently experimental
+- Controlled by `--blur-radius`, `--light-strength`, and `--reapply-strength`
+
+**Color Boosting** (`color_boost.py`)
+- Converts to HSV color space and multiplies saturation channel
+- Applies contrast enhancement afterward
+- Configurable via `--saturation` and `--contrast`
+
+**Dithering** (`dither.py`)
+- Ordered Bayer matrix dithering implementation
+- Provides textured retro shading effect
+- Configurable strength via `--dither-strength`
+
+**CLI & Configuration** (`main.py`, `config.py`)
+- Full argument parsing for all pipeline parameters
+- Centralized default configuration in `config.py`
+- Auto-height calculation from width to preserve aspect ratio
+- Support for all pipeline features
+
+### Known Issues
+
+1. **Light Extraction Degradation**: Recent commit "added light extraction but just looks worse" - the feature extracts luminance but may reduce detail visibility. Set `--light-strength 0` to disable.
+
+2. **Requirements Missing**: `requirements.txt` is missing `opencv-python` which is required for segmentation. Should be added.
+
+3. **Presets Not Implemented**: Framework exists in CLI, but preset definitions are not yet implemented in code.
+
+### Architecture Notes
+
+- **Majority Vote Label Downscaling**: Ensures labels remain discrete during downscaling (can't average category IDs)
+- **Per-Region Color Budgeting**: Prevents large regions from consuming all colors based on variation metrics
+- **Regional Quantization**: Each region quantizes independently, avoiding global palette conflicts
+- **Boundary Post-Processing**: Border straightening happens after label downscaling, not before, for better results
+- **Two-Phase Lighting**: Light extraction before segmentation preserves segmentation quality; reapplication happens after upscaling
+
+## Next Steps for v1.0 Release
+
+1. **Fix Missing Dependency**: Add `opencv-python` to `requirements.txt`
+2. **Implement Presets**: Add preset definitions (Undertale dark, Gameboy monochrome, NES 8-bit, Arcade bright) to CLI
+3. **Test & Validate**: Run end-to-end tests on sample images to verify all features work
+4. **Light Extraction Tuning**: Either improve the light extraction algorithm to preserve more detail, or document when to disable it
+5. **Example Images**: Add before/after examples to the repository for demonstration
 
 ## Possible Future Extensions (not required for v1)
 
@@ -184,3 +244,4 @@ python src/main.py --input room.jpg --output room_pixel.png --width 48 --height 
 - Palette lock to a specific existing image so multiple outputs share one consistent look
 - Try `cv2.watershed` with markers as an alternative segmentation backend for cases where two touching objects share nearly identical colors and mean shift filtering merges them into one region
 - Let the user manually nudge region boundaries or manually merge two regions, for cases where automatic segmentation splits or merges objects in a way that does not match what the user actually wants
+- Interactive UI to preview parameter changes before final export

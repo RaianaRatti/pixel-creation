@@ -1,45 +1,38 @@
 import numpy as np
 
-from config import TOTAL_COLORS, MIN_COLORS_PER_REGION, MAX_COLORS_PER_REGION
-
 def allocate_color_budget(
-        image, 
-        labels, 
-        total_colors = TOTAL_COLORS, 
-        min_colors_per_region = MIN_COLORS_PER_REGION, 
-        max_colors_per_region = MAX_COLORS_PER_REGION
+        image,
+        labels,
+        min_colors_per_region,
+        max_colors_per_region
 ):
     counts = np.bincount(labels.ravel())
     variation_scores = {}
 
-    for label in range(1,len(counts)):
+    for label in range(1, len(counts)):
         if counts[label] == 0:
             continue
 
         pixels = image[labels == label]
-
         variation = pixels.std(axis=0).mean()
-        size = counts[label]
+        variation_scores[label] = variation
 
-        # number of colors region gets depends on 1. variation of color in region 2. size of region
-        variation_scores[label] = variation * size
+    if not variation_scores:
+        return {}
 
-    budgets = {
-        label: min_colors_per_region for label in variation_scores
-    }
+    # Normalize variation to [0, 1] range
+    min_var = min(variation_scores.values())
+    max_var = max(variation_scores.values())
 
-    remaining = total_colors - len(budgets) * min_colors_per_region
-    total_score = sum(variation_scores.values()) # sum of all variations
-
-    # finds region that needs variation most and adds to their budget
-    for label in budgets:
-        if total_score > 0:
-            # divides variation into percentage, cumulative variation of all regions = 100%
-            extra = round(remaining * variation_scores[label] / total_score)
+    budgets = {}
+    for label, variation in variation_scores.items():
+        if max_var == min_var:
+            normalized = 0.5
         else:
-            extra = 0
+            normalized = (variation - min_var) / (max_var - min_var)
 
-        budgets[label] += extra
-        budgets[label] = max(1, min(budgets[label], max_colors_per_region))
+        # Map normalized variation to color range [min_colors_per_region, max_colors_per_region]
+        n_colors = round(min_colors_per_region + normalized * (max_colors_per_region - min_colors_per_region))
+        budgets[label] = n_colors
 
     return budgets

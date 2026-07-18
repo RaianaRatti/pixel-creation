@@ -2,10 +2,8 @@ import numpy as np
 import cv2
 from PIL import Image
 
-from config import BLUR_RADIUS, STRENGTH
 
-
-def extract_light_variation(image: Image.Image, blur_radius: int = BLUR_RADIUS, strength: float = STRENGTH):
+def extract_light_variation(image: Image.Image, blur_radius: int, strength: float):
     rgb = np.asarray(image, dtype=np.float32)
 
     # Standard luminance weights (matches how the eye perceives brightness)

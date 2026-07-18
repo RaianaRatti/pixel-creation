@@ -2,13 +2,11 @@ from PIL import Image
 import cv2
 import numpy as np
 
-from config import SPATIAL_RADIUS, COLOR_RADIUS
-
 def segment_image(
         image: Image.Image,
         segmentation_max_dimension: int,
-        spatial_radius: int = SPATIAL_RADIUS,
-        color_radius: int = COLOR_RADIUS
+        spatial_radius: int,
+        color_radius: int
 ):
     # 1. Resize image so longest side is segmentation_max_dimension
     width, height = image.size

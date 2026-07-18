@@ -17,7 +17,6 @@ def run_pipeline(
     image,
     width,
     height,
-    colors,
     min_colors_per_region,
     max_colors_per_region,
     spatial_radius,
@@ -34,12 +33,12 @@ def run_pipeline(
     dither,
     dither_strength,
     scale,
+    blur_radius,
+    light_strength,
+    reapply_strength,
     preset=None,
-    blur_radius=31,
-    light_strength=1.0,
-    reapply_strength=0.4,
 ):
-    # image, light_diff = extract_light_variation(image, blur_radius=blur_radius, strength=light_strength)
+    image, light_diff = extract_light_variation(image, blur_radius=blur_radius, strength=light_strength) # light
 
     labels_full = segment_image(
         image,
@@ -49,7 +48,7 @@ def run_pipeline(
     )
 
     block_image = downscale_image(image, width, height)
-    # block_light_diff = resize_light_diff(light_diff, width, height)
+    block_light_diff = resize_light_diff(light_diff, width, height) # light
 
     block_labels = resize_labels(labels_full, width, height)
     block_labels = cleanup_small_regions(np.array(block_image), block_labels, min_region_size)
@@ -58,14 +57,13 @@ def run_pipeline(
     budgets = allocate_color_budget(
         np.array(block_image),
         block_labels,
-        total_colors=colors,
         min_colors_per_region=min_colors_per_region,
         max_colors_per_region=max_colors_per_region,
     )
 
     pixel_image = quantize_regions(np.array(block_image), block_labels, budgets)
     pixel_image = Image.fromarray(pixel_image)
-    # pixel_image = reapply_light_variation(pixel_image, block_light_diff, strength=reapply_strength)
+    pixel_image = reapply_light_variation(pixel_image, block_light_diff, strength=reapply_strength) # light
 
     pixel_image = boost_colors(pixel_image, saturation=saturation, contrast=contrast)
 

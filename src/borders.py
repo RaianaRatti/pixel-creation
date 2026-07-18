@@ -1,10 +1,8 @@
 from PIL import ImageDraw
 
-
-def draw_region_borders(image, labels, scale, border_size=2, border_color="black"):
+def draw_region_borders(image, labels, scale, border_size, border_color):
     draw = ImageDraw.Draw(image)
     height, width = labels.shape
-    half = border_size / 2
 
     for y in range(height):
         for x in range(width):

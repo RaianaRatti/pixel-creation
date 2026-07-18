@@ -1,8 +1,5 @@
 import numpy as np
 
-from config import MIN_REGION_SIZE
-
-
 # Takes labels (segmented image) array and downscales it
 def resize_labels(labels: np.ndarray, width: int, height: int) -> np.ndarray:
     input_height, input_width = labels.shape
@@ -27,7 +24,7 @@ def resize_labels(labels: np.ndarray, width: int, height: int) -> np.ndarray:
     return output
 
 # Merges tiny areas (smaller than MIN_REGION_SIZE)
-def cleanup_small_regions(image, labels, min_region_size=MIN_REGION_SIZE):
+def cleanup_small_regions(image, labels, min_region_size):
     changed = True
     while changed:
         changed = False

@@ -1,8 +1,6 @@
 import numpy as np
 from collections import defaultdict
 
-from config import MAX_DEVIATION, MIN_BOUNDARY_LENGTH
-
 def _fit_and_snap(points, span_axis):
     pts = np.array(points, dtype=np.float64)
     x = pts[:, 0]
@@ -40,7 +38,7 @@ def _boundary_points(labels, vertical):
     return raw
 
 
-def straighten_borders(labels, max_deviation=MAX_DEVIATION, min_boundary_length=MIN_BOUNDARY_LENGTH):
+def straighten_borders(labels, max_deviation, min_boundary_length):
     out = labels.copy()
     h, w = labels.shape
 

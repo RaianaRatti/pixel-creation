@@ -1,9 +1,7 @@
 from PIL import Image, ImageEnhance
 import numpy as np
 
-from config import SATURATION, CONTRAST
-
-def boost_colors(image, saturation=SATURATION, contrast=CONTRAST):
+def boost_colors(image, saturation, contrast):
     hsv = image.convert("HSV")
     h, s, v = hsv.split()
 
